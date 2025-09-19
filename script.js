@@ -1,5 +1,5 @@
+// Updated script.js - use this to replace your existing file
 const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwzFs-S4hU3_GJ5vA4VnZ38uj0uWN2fSn37KAsA_mzJo4MJ0pNNHmEABJnCytXmr36Ksw/exec";
-
 
 let questions = [];
 let currentIndex = 0;
@@ -10,10 +10,10 @@ let isSubmitting = false;
 
 async function loadQuestions() {
   try {
-    const r = await fetch(WEBAPP_URL);
+    const r = await fetch(WEBAPP_URL); // GET for questions
     const json = await r.json();
     if (json.error) {
-      document.getElementById("quiz").innerHTML = `<p>Error loading questions: ${json.error}</p>`;
+      document.getElementById("quiz").innerHTML = `<p>Error loading questions: ${escapeHtml(json.error)}</p>`;
       return;
     }
     questions = json;
@@ -38,19 +38,21 @@ function startQuiz() {
 }
 
 function showQuestion() {
+  // If all questions done, ensure last answer saved then submit
   if (currentIndex >= questions.length) {
-    // make sure last answer saved then submit
     saveCurrentAnswer();
     submitQuiz();
     return;
   }
+
   const q = questions[currentIndex];
   document.getElementById("quiz").innerHTML = `
     <div class="question-card">
-      <p class="question-text">${q.text}</p>
+      <p class="question-text">${escapeHtml(q.text)}</p>
       <input type="text" id="answerInput" class="answer-input" placeholder="Your Answer" value="${userAnswers[q.id] ? escapeHtml(userAnswers[q.id]) : ""}">
     </div>
   `;
+
   const t = (typeof q.timeLimit === "number" && !isNaN(q.timeLimit)) ? q.timeLimit : 30;
   startTimer(t);
   updateNextButtonLabel();
@@ -59,10 +61,12 @@ function showQuestion() {
 function startTimer(seconds) {
   clearInterval(timer);
   timeLeft = Number(seconds) || 30;
-  document.getElementById("timer").innerText = `Time left: ${timeLeft}s`;
+  const timerEl = document.getElementById("timer");
+  if (timerEl) timerEl.innerText = `Time left: ${timeLeft}s`;
+
   timer = setInterval(() => {
     timeLeft--;
-    document.getElementById("timer").innerText = `Time left: ${timeLeft}s`;
+    if (timerEl) timerEl.innerText = `Time left: ${timeLeft}s`;
     if (timeLeft <= 0) {
       saveAnswerAndNext();
     }
@@ -77,15 +81,17 @@ function saveCurrentAnswer() {
 }
 
 function saveAnswerAndNext() {
-  // save current
+  // Save current answer
   saveCurrentAnswer();
-  // advance
+  // Advance index
   currentIndex++;
+  // Show next question or finish
   showQuestion();
 }
 
 function updateNextButtonLabel() {
   const btn = document.getElementById("nextBtn");
+  if (!btn) return;
   btn.innerText = (currentIndex === questions.length - 1) ? "Finish" : "Next";
 }
 
@@ -93,30 +99,43 @@ async function submitQuiz() {
   if (isSubmitting) return;
   isSubmitting = true;
   clearInterval(timer);
-  // ensure current question saved
+
+  // Ensure the current question is saved (in case user didn't click Next)
   if (currentIndex < questions.length) {
     saveCurrentAnswer();
   }
+
   const name = document.getElementById("name").value.trim();
   const roll = document.getElementById("roll").value.trim();
-  // disable UI
-  document.getElementById("nextBtn").disabled = true;
+
+  // disable UI while submitting
+  const nextBtn = document.getElementById("nextBtn");
+  if (nextBtn) nextBtn.disabled = true;
 
   try {
+    // IMPORTANT: do not send Content-Type header to avoid CORS preflight
     const res = await fetch(WEBAPP_URL, {
       method: "POST",
-      body: JSON.stringify({ name, roll, answers: userAnswers }),
-      headers: { "Content-Type": "application/json" }
+      body: JSON.stringify({ name, roll, answers: userAnswers })
     });
+
+    // If network-level error, res may be undefined or not ok
+    if (!res) throw new Error("No response from server");
+
     const txt = await res.text();
+
+    // Try parse JSON even if Content-Type not set
     let json;
     try {
       json = JSON.parse(txt);
     } catch (e) {
+      // If parsing fails, surface server text for debugging
       throw new Error("Invalid JSON from server: " + txt);
     }
+
     if (json.error) throw new Error(json.error);
 
+    // Show result and PDF link
     document.getElementById("quizArea").style.display = "none";
     document.getElementById("result").innerHTML = `
       <h2>Your Score: ${json.score} / ${json.total}</h2>
@@ -124,19 +143,27 @@ async function submitQuiz() {
     `;
   } catch (err) {
     console.error("Submission error:", err);
-    // show helpful message to user and developer info
     document.getElementById("result").innerHTML = `<p>Submission failed: ${escapeHtml(String(err.message || err))}</p><p>Check Apps Script Executions log for details.</p>`;
-    // re-enable Next button so teacher can retry
-    document.getElementById("nextBtn").disabled = false;
+    // re-enable Next button so teacher/student can retry
+    if (nextBtn) nextBtn.disabled = false;
   } finally {
     isSubmitting = false;
   }
 }
 
 function escapeHtml(str) {
-  return str.replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]); });
+  if (!str) return "";
+  return String(str).replace(/[&<>"']/g, function(m) {
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]);
+  });
 }
 
-document.getElementById("startBtn").addEventListener("click", startQuiz);
-document.getElementById("nextBtn").addEventListener("click", saveAnswerAndNext);
-window.onload = loadQuestions;
+// Attach listeners after DOM elements exist
+window.addEventListener("DOMContentLoaded", () => {
+  const startBtn = document.getElementById("startBtn");
+  const nextBtn = document.getElementById("nextBtn");
+  if (startBtn) startBtn.addEventListener("click", startQuiz);
+  if (nextBtn) nextBtn.addEventListener("click", saveAnswerAndNext);
+  // Load questions now
+  loadQuestions();
+});
