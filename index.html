@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google Sheet Quiz with Timer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+
+    <h1>Google Sheet Quiz</h1>
+
+    <div id="studentInfo" class="student-info">
+      <input type="text" id="name" placeholder="Enter Name" required>
+      <input type="text" id="roll" placeholder="Enter Roll No" required>
+      <button id="startBtn">Start Quiz</button>
+    </div>
+
+    <div id="quizArea" style="display:none;">
+      <div id="timer" class="timer">Time left: 30s</div>
+      <div id="quiz"></div>
+      <button id="nextBtn">Next</button>
+    </div>
+
+    <div id="result" class="result"></div>
+
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
